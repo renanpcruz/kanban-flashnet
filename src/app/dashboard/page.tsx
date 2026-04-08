@@ -2,16 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getBoards } from '../lib/boards';
-import { Board } from '../lib/types';
+import { getBoards, createBoard } from '../lib/boards';
+
+type Board = {
+  id: string;
+  name: string;
+  description: string;
+};
 
 export default function DashboardPage() {
   const router = useRouter();
+
   const [boards, setBoards] = useState<Board[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    async function loadBoards() {
+    async function load() {
       const token = localStorage.getItem('access_token');
 
       if (!token) {
@@ -25,59 +33,83 @@ export default function DashboardPage() {
       } catch (err) {
         console.error(err);
         router.push('/login');
-      } finally {
-        setLoading(false);
       }
     }
 
-    loadBoards();
+    load();
   }, [router]);
 
-  if (loading) return <p>Carregando boards...</p>;
+  async function handleCreateBoard() {
+    if (!name.trim()) return;
+
+    try {
+      setLoading(true);
+
+      const newBoard = await createBoard(name, description);
+
+      // adiciona direto na lista (melhor UX)
+      setBoards((prev) => [newBoard, ...prev]);
+
+      setName('');
+      setDescription('');
+    } catch (err: any) {
+      console.error(err);
+
+      if (err?.message?.includes('403')) {
+        alert('Apenas admin pode criar boards');
+      } else {
+        alert('Erro ao criar board');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div style={{ padding: '20px' }}>
-      <h1>Boards</h1>
+      <h1>Dashboard</h1>
 
-      {boards.length === 0 && <p>Nenhum board encontrado</p>}
+      {/* CRIAR BOARD */}
+      <div style={{ marginBottom: '20px' }}>
+        <h2>Criar novo board</h2>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-          gap: '20px',
-          marginTop: '20px',
-        }}
-      >
+        <input
+          placeholder="Nome do board"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={{ marginRight: '10px' }}
+        />
+
+        <input
+          placeholder="Descrição"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          style={{ marginRight: '10px' }}
+        />
+
+        <button onClick={handleCreateBoard} disabled={loading}>
+          {loading ? 'Criando...' : 'Criar'}
+        </button>
+      </div>
+
+      {/* LISTA DE BOARDS */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
         {boards.map((board) => (
           <div
             key={board.id}
-            onClick={() => router.push(`/dashboard/${board.id}`)} // ✅ clique aqui
+            onClick={() => router.push(`/dashboard/${board.id}`)}
             style={{
-              background: '#2E2E3F',
-              padding: '20px',
+              border: '1px solid #ccc',
+              padding: '15px',
               borderRadius: '8px',
-              color: 'white',
-              cursor: 'pointer', // ✅ feedback visual
-              transition: '0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#3A3A5A';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#2E2E3F';
+              cursor: 'pointer',
+              width: '200px',
             }}
           >
             <h3>{board.name}</h3>
-
-            <p style={{ fontSize: '14px', marginTop: '10px' }}>
+            <p style={{ fontSize: '12px' }}>
               {board.description || 'Sem descrição'}
             </p>
-
-            <div style={{ marginTop: '10px', fontSize: '12px' }}>
-              <p>{board.cards_count} cards</p>
-              <p>{board.members_count} membros</p>
-            </div>
           </div>
         ))}
       </div>

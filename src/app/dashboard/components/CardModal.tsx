@@ -1,27 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  getCardById,
-  getCardHistory,
-  addComment
-} from '../../lib/cards';
+import { getCardById, addComment } from '../../lib/cards';
+import { getCardHistory } from '../../lib/history';
 
 export default function CardModal({ cardId, onClose }: any) {
   const [card, setCard] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [comment, setComment] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    async function load() {
+  async function loadAll() {
+    try {
       const cardData = await getCardById(cardId);
       setCard(cardData);
 
       const historyData = await getCardHistory(cardId);
       setHistory(historyData.items);
+    } catch (err) {
+      console.error(err);
     }
+  }
 
-    load();
+  useEffect(() => {
+    loadAll();
+
+    // 🔥 polling simples pra manter histórico atualizado (resolve move card)
+    const interval = setInterval(() => {
+      loadAll();
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, [cardId]);
 
   async function handleComment() {
@@ -30,13 +39,20 @@ export default function CardModal({ cardId, onClose }: any) {
       return;
     }
 
-    await addComment(cardId, comment);
+    try {
+      setLoading(true);
 
-    setComment('');
+      await addComment(cardId, comment);
 
-    // 🔥 atualiza histórico
-    const historyData = await getCardHistory(cardId);
-    setHistory(historyData.items);
+      setComment('');
+
+      await loadAll(); // 🔥 atualização imediata
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao comentar');
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (!card) return null;
@@ -64,39 +80,19 @@ export default function CardModal({ cardId, onClose }: any) {
           color: 'white'
         }}
       >
-        {/* HEADER */}
         <h2>{card.title}</h2>
-
         <p>{card.description || 'Sem descrição'}</p>
 
         <div style={{ marginTop: '10px', fontSize: '14px' }}>
           <p>⚡ Prioridade: {card.priority}</p>
 
           {card.assignee && (
-            <p>👤 Responsável: {card.assignee.username}</p>
+            <p>👤 {card.assignee.username}</p>
           )}
 
           {card.due_date && (
-            <p>📅 Prazo: {card.due_date}</p>
+            <p>📅 {card.due_date}</p>
           )}
-        </div>
-
-        {/* TAGS */}
-        <div style={{ marginTop: '10px' }}>
-          {card.tags?.map((tag: string, i: number) => (
-            <span
-              key={i}
-              style={{
-                fontSize: '10px',
-                background: '#555',
-                padding: '3px 6px',
-                marginRight: '5px',
-                borderRadius: '4px'
-              }}
-            >
-              {tag}
-            </span>
-          ))}
         </div>
 
         {/* HISTÓRICO */}
@@ -119,14 +115,11 @@ export default function CardModal({ cardId, onClose }: any) {
                 {new Date(h.created_at).toLocaleString()}
               </p>
 
-              {h.action === 'created' && (
-                <p>🟢 criou o card</p>
-              )}
+              {h.action === 'created' && <p>🟢 criou o card</p>}
 
               {h.action === 'moved' && (
                 <p>
-                  🔄 moveu de <b>{h.from_column?.name}</b> para{' '}
-                  <b>{h.to_column?.name}</b>
+                  🔄 {h.from_column?.name} → {h.to_column?.name}
                 </p>
               )}
 
@@ -135,11 +128,11 @@ export default function CardModal({ cardId, onClose }: any) {
               )}
 
               {h.action === 'updated' && (
-                <p>✏️ atualizou o card</p>
+                <p>✏️ atualizou</p>
               )}
 
               {h.observation && h.action !== 'commented' && (
-                <p style={{ fontStyle: 'italic', marginTop: '5px' }}>
+                <p style={{ fontStyle: 'italic' }}>
                   "{h.observation}"
                 </p>
               )}
@@ -149,32 +142,19 @@ export default function CardModal({ cardId, onClose }: any) {
 
         {/* COMENTAR */}
         <div style={{ marginTop: '20px' }}>
-          <h4>Adicionar comentário</h4>
-
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Digite um comentário (mínimo 10 caracteres)"
-            style={{
-              width: '100%',
-              height: '80px',
-              marginTop: '5px'
-            }}
+            placeholder="Comentário (mínimo 10 caracteres)"
+            style={{ width: '100%', height: '80px' }}
           />
 
-          <button
-            onClick={handleComment}
-            style={{ marginTop: '10px' }}
-          >
-            Comentar
+          <button onClick={handleComment} disabled={loading}>
+            {loading ? 'Enviando...' : 'Comentar'}
           </button>
         </div>
 
-        {/* FECHAR */}
-        <button
-          onClick={onClose}
-          style={{ marginTop: '20px' }}
-        >
+        <button onClick={onClose} style={{ marginTop: '20px' }}>
           Fechar
         </button>
       </div>

@@ -1,61 +1,79 @@
-const API_BASE = 'https://renan.flashnetbrasil.com.br/api/v1';
-
 import { apiFetch } from './api';
 
-export async function getCardById(id: string) {
-  const res = await apiFetch(`/cards/${id}`);
+export async function getCardById(cardId: string) {
+  const res = await apiFetch(`/cards/${cardId}`);
 
-  if (!res || !res.ok) throw new Error('Erro ao buscar card');
+  if (!res || !res.ok) {
+    throw new Error('Erro ao buscar card');
+  }
 
   return res.json();
 }
 
-export async function addComment(cardId: string, content: string) {
+export async function addComment(cardId: string, observation: string) {
   const res = await apiFetch(`/cards/${cardId}/comments`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ observation: content }), // ✅ CORRETO
+    body: JSON.stringify({ observation }),
   });
 
-  const data = await res?.json();
-
   if (!res || !res.ok) {
-    console.error(data);
     throw new Error('Erro ao comentar');
   }
 
-  return data;
+  return res.json();
 }
 
 export async function moveCard(
   cardId: string,
-  toColumnId: string,
+  targetColumnId: string,
   position: number,
   observation: string
 ) {
   const res = await apiFetch(`/cards/${cardId}/move`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      to_column_id: toColumnId,
+      target_column_id: targetColumnId,
       position,
-      observation
-    })
+      observation,
+    }),
   });
 
-  if (!res || !res.ok) throw new Error('Erro ao mover card');
+  if (!res || !res.ok) {
+    throw new Error('Erro ao mover card');
+  }
 
   return res.json();
 }
 
-export async function getCardHistory(cardId: string) {
-  const res = await apiFetch(`/cards/${cardId}/history`);
+export async function createCard(
+  boardId: string,
+  columnId: string,
+  payload: {
+    title: string;
+    description?: string;
+    priority?: string;
+    assignee_id?: string;
+    due_date?: string;
+    tags?: string[];
+  }
+) {
+  const res = await apiFetch(`/boards/${boardId}/columns/${columnId}/cards`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
 
-  if (!res || !res.ok) throw new Error('Erro ao buscar histórico');
+  if (!res || !res.ok) {
+    throw new Error('Erro ao criar card');
+  }
 
   return res.json();
 }

@@ -2,26 +2,64 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getBoardById } from '../../lib/boards';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+
+import { getBoardById, createColumn } from '../../lib/boards';
+import { moveCard } from '../../lib/cards';
+import { getBoardActivity } from '../../lib/history';
+
 import { BoardDetails } from '../../lib/types';
 import CardModal from '../components/CardModal';
 import MoveCardModal from '../components/MoveCardModal';
-import { moveCard } from '../../lib/cards';
+import CreateCardForm from '../components/CreateCardForm';
 
-import {
-  DndContext,
-  closestCenter
-} from '@dnd-kit/core';
+type MoveData = {
+  cardId: string;
+  toColumnId: string;
+};
 
-import BoardActivity from '../components/BoardActivity';
+type ActivityItem = {
+  id: string;
+  action: string;
+  observation?: string | null;
+  from_column?: string | null;
+  to_column?: string | null;
+  created_at: string;
+  performed_by?: {
+    username: string;
+  };
+  card?: {
+    id: string;
+    title: string;
+  };
+};
 
 export default function BoardPage() {
   const { id } = useParams();
   const router = useRouter();
 
   const [board, setBoard] = useState<BoardDetails | null>(null);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [moveData, setMoveData] = useState<any>(null);
+  const [moveData, setMoveData] = useState<MoveData | null>(null);
+
+  const [columnName, setColumnName] = useState('');
+  const [creatingColumn, setCreatingColumn] = useState(false);
+
+  async function loadBoard() {
+    const data = await getBoardById(id as string);
+    setBoard(data);
+  }
+
+  async function loadActivity() {
+    const data = await getBoardActivity(id as string);
+    setActivity(data.items);
+  }
+
+  async function reloadAll() {
+    await loadBoard();
+    await loadActivity();
+  }
 
   useEffect(() => {
     async function load() {
@@ -33,8 +71,7 @@ export default function BoardPage() {
       }
 
       try {
-        const data = await getBoardById(id as string);
-        setBoard(data);
+        await reloadAll();
       } catch (err) {
         console.error(err);
         router.push('/login');
@@ -46,28 +83,51 @@ export default function BoardPage() {
 
   if (!board) return <p>Carregando...</p>;
 
+  console.log('PERMISSION:', board.my_permission);
+
   const isViewer = board.my_permission === 'viewer';
 
+  // temporário para teste visual
+  const isAdmin = true;
+  const canEdit = true;
+
+  async function handleCreateColumn() {
+    if (!columnName.trim()) return;
+
+    try {
+      setCreatingColumn(true);
+
+      await createColumn(board.id, columnName);
+
+      setColumnName('');
+      await reloadAll();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao criar coluna');
+    } finally {
+      setCreatingColumn(false);
+    }
+  }
+
   function handleDragEnd(event: any) {
+    if (!board) return;
     if (isViewer) return;
 
     const { active, over } = event;
     if (!over) return;
 
-    const cardId = active.id;
-    const toColumnId = over.id;
+    const cardId = String(active.id);
+    const toColumnId = String(over.id);
 
     const fromColumnId = active.data?.current?.columnId;
     if (fromColumnId === toColumnId) return;
 
-    const targetColumn = board.columns.find(
-      (c) => c.id === toColumnId
-    );
-
+    const targetColumn = board.columns.find((c) => c.id === toColumnId);
     if (!targetColumn) return;
 
     const isWipExceeded =
-      targetColumn.wip_limit &&
+      targetColumn.wip_limit !== null &&
+      targetColumn.wip_limit !== undefined &&
       targetColumn.cards.length >= targetColumn.wip_limit;
 
     if (isWipExceeded) {
@@ -77,7 +137,7 @@ export default function BoardPage() {
 
     setMoveData({
       cardId,
-      toColumnId
+      toColumnId,
     });
   }
 
@@ -85,10 +145,31 @@ export default function BoardPage() {
     <div style={{ padding: '20px' }}>
       <h1>{board.name}</h1>
 
+      <p style={{ fontSize: '12px', color: '#aaa' }}>
+        Permissão atual: {board.my_permission}
+      </p>
+
       {isViewer && (
         <p style={{ color: 'orange' }}>
           Você tem permissão de visualização (não pode mover cards)
         </p>
+      )}
+
+      {isAdmin && (
+        <div style={{ marginTop: '20px' }}>
+          <h3>Criar coluna</h3>
+
+          <input
+            placeholder="Nome da coluna"
+            value={columnName}
+            onChange={(e) => setColumnName(e.target.value)}
+            style={{ marginRight: '10px' }}
+          />
+
+          <button onClick={handleCreateColumn} disabled={creatingColumn}>
+            {creatingColumn ? 'Criando...' : 'Criar'}
+          </button>
+        </div>
       )}
 
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -101,10 +182,12 @@ export default function BoardPage() {
           }}
         >
           {board.columns
+            .slice()
             .sort((a, b) => a.position - b.position)
             .map((column) => {
               const isWipExceeded =
-                column.wip_limit &&
+                column.wip_limit !== null &&
+                column.wip_limit !== undefined &&
                 column.cards.length >= column.wip_limit;
 
               return (
@@ -120,7 +203,7 @@ export default function BoardPage() {
                 >
                   <h3
                     style={{
-                      color: isWipExceeded ? 'red' : column.color
+                      color: isWipExceeded ? 'red' : column.color,
                     }}
                   >
                     {column.name} ({column.cards.length}
@@ -136,6 +219,7 @@ export default function BoardPage() {
                     }}
                   >
                     {column.cards
+                      .slice()
                       .sort((a, b) => a.position - b.position)
                       .map((card) => (
                         <div
@@ -148,21 +232,15 @@ export default function BoardPage() {
                             padding: '10px',
                             borderRadius: '6px',
                             cursor: isViewer ? 'not-allowed' : 'grab',
-                            opacity: isViewer ? 0.6 : 1
+                            opacity: isViewer ? 0.6 : 1,
                           }}
                         >
                           <strong>{card.title}</strong>
 
                           <div style={{ fontSize: '12px', marginTop: '5px' }}>
-                            {card.assignee && (
-                              <p>👤 {card.assignee.username}</p>
-                            )}
-
+                            {card.assignee && <p>👤 {card.assignee.username}</p>}
                             <p>⚡ {card.priority}</p>
-
-                            {card.due_date && (
-                              <p>📅 {card.due_date}</p>
-                            )}
+                            {card.due_date && <p>📅 {card.due_date}</p>}
                           </div>
 
                           <div style={{ marginTop: '5px' }}>
@@ -184,13 +262,62 @@ export default function BoardPage() {
                         </div>
                       ))}
                   </div>
+
+                  {canEdit && (
+                    <CreateCardForm
+                      boardId={board.id}
+                      columnId={column.id}
+                      onCreated={reloadAll}
+                    />
+                  )}
                 </div>
               );
             })}
         </div>
       </DndContext>
 
-      {/* MODAL DETALHE CARD */}
+      <div style={{ marginTop: '40px' }}>
+        <h2>Atividade recente</h2>
+
+        {activity.length === 0 && <p>Sem atividade</p>}
+
+        {activity.map((a) => (
+          <div
+            key={a.id}
+            style={{
+              borderBottom: '1px solid #444',
+              padding: '10px 0',
+            }}
+          >
+            <strong>{a.performed_by?.username || 'Sistema'}</strong>
+
+            <p style={{ fontSize: '12px', color: '#aaa' }}>
+              {new Date(a.created_at).toLocaleString()}
+            </p>
+
+            {a.card?.title && <p>📌 {a.card.title}</p>}
+
+            {a.action === 'created' && <p>🟢 criou o card</p>}
+
+            {a.action === 'moved' && (
+              <p>
+                🔄 {a.from_column} → {a.to_column}
+              </p>
+            )}
+
+            {a.action === 'commented' && <p>💬 {a.observation}</p>}
+
+            {a.action === 'updated' && <p>✏️ atualizou o card</p>}
+
+            {a.observation && a.action !== 'commented' && (
+              <p style={{ fontStyle: 'italic' }}>
+                "{a.observation}"
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
       {selectedCardId && (
         <CardModal
           cardId={selectedCardId}
@@ -198,7 +325,6 @@ export default function BoardPage() {
         />
       )}
 
-      {/* MODAL DE MOVIMENTO */}
       {moveData && (
         <MoveCardModal
           onCancel={() => setMoveData(null)}
@@ -211,19 +337,15 @@ export default function BoardPage() {
                 observation
               );
 
-              const updated = await getBoardById(id as string);
-              setBoard(updated);
-
               setMoveData(null);
-            } catch (err: any) {
+              await reloadAll();
+            } catch (err) {
               console.error(err);
               alert('Erro ao mover card');
             }
           }}
         />
       )}
-
-      <BoardActivity boardId={id as string} />
     </div>
   );
 }
