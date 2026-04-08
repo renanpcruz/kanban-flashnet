@@ -8,6 +8,9 @@ type Board = {
   id: string;
   name: string;
   description: string;
+  cards_count: number;
+  members_count: number;
+  my_permission: string;
 };
 
 export default function DashboardPage() {
@@ -47,7 +50,6 @@ export default function DashboardPage() {
 
       const newBoard = await createBoard(name, description);
 
-      // adiciona direto na lista (melhor UX)
       setBoards((prev) => [newBoard, ...prev]);
 
       setName('');
@@ -58,7 +60,7 @@ export default function DashboardPage() {
       if (err?.message?.includes('403')) {
         alert('Apenas admin pode criar boards');
       } else {
-        alert('Erro ao criar board');
+        alert(err?.message || 'Erro ao criar board');
       }
     } finally {
       setLoading(false);
@@ -69,7 +71,6 @@ export default function DashboardPage() {
     <div style={{ padding: '20px' }}>
       <h1>Dashboard</h1>
 
-      {/* CRIAR BOARD */}
       <div style={{ marginBottom: '20px' }}>
         <h2>Criar novo board</h2>
 
@@ -92,7 +93,6 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* LISTA DE BOARDS */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
         {boards.map((board) => (
           <div
@@ -103,13 +103,28 @@ export default function DashboardPage() {
               padding: '15px',
               borderRadius: '8px',
               cursor: 'pointer',
-              width: '200px',
+              width: '240px',
+              background: '#1f1f2e',
             }}
           >
-            <h3>{board.name}</h3>
-            <p style={{ fontSize: '12px' }}>
+            <h3 style={{ marginBottom: '8px' }}>{board.name}</h3>
+
+            <p style={{ fontSize: '12px', color: '#bbb', marginBottom: '12px' }}>
               {board.description || 'Sem descrição'}
             </p>
+
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                fontSize: '14px',
+              }}
+            >
+              <span>📌 Cards: {board.cards_count}</span>
+              <span>👥 Pessoas: {board.members_count}</span>
+              <span>🔐 Permissão: {board.my_permission}</span>
+            </div>
           </div>
         ))}
       </div>

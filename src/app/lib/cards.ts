@@ -1,10 +1,19 @@
 import { apiFetch } from './api';
 
+async function getErrorMessage(res: Response, fallback: string) {
+  try {
+    const data = await res.json();
+    return data?.error?.message || data?.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function getCardById(cardId: string) {
   const res = await apiFetch(`/cards/${cardId}`);
 
   if (!res || !res.ok) {
-    throw new Error('Erro ao buscar card');
+    throw new Error(await getErrorMessage(res, 'Erro ao buscar card'));
   }
 
   return res.json();
@@ -20,7 +29,7 @@ export async function addComment(cardId: string, observation: string) {
   });
 
   if (!res || !res.ok) {
-    throw new Error('Erro ao comentar');
+    throw new Error(await getErrorMessage(res, 'Erro ao comentar'));
   }
 
   return res.json();
@@ -45,7 +54,7 @@ export async function moveCard(
   });
 
   if (!res || !res.ok) {
-    throw new Error('Erro ao mover card');
+    throw new Error(await getErrorMessage(res, 'Erro ao mover card'));
   }
 
   return res.json();
@@ -72,7 +81,7 @@ export async function createCard(
   });
 
   if (!res || !res.ok) {
-    throw new Error('Erro ao criar card');
+    throw new Error(await getErrorMessage(res, 'Erro ao criar card'));
   }
 
   return res.json();
@@ -98,7 +107,7 @@ export async function updateCard(
   });
 
   if (!res || !res.ok) {
-    throw new Error('Erro ao atualizar card');
+    throw new Error(await getErrorMessage(res, 'Erro ao atualizar card'));
   }
 
   return res.json();
@@ -110,7 +119,7 @@ export async function archiveCard(cardId: string) {
   });
 
   if (!res || !res.ok) {
-    throw new Error('Erro ao arquivar card');
+    throw new Error(await getErrorMessage(res, 'Erro ao arquivar card'));
   }
 
   return res.json();

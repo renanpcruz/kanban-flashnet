@@ -1,22 +1,45 @@
-interface DashboardCardProps {
-  title: string;
-  value: string | number;
-}
+type Props = {
+  board: {
+    id: string;
+    name: string;
+    description: string;
+    my_permission: string;
+    cards_count: number;
+    members_count: number;
+  };
+  onClick?: () => void;
+};
 
-export default function DashboardCard({ title, value }: DashboardCardProps) {
+export default function DashboardCard({ board, onClick }: Props) {
   return (
-    <div style={{
-      backgroundColor: '#2E2E3F', // cinza escuro neutro
-      color: 'white',
-      padding: '20px',
-      borderRadius: '8px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center'
-    }}>
-      <h3 style={{ fontSize: '18px', marginBottom: '10px' }}>{title}</h3>
-      <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{value}</p>
+    <div
+      onClick={onClick}
+      style={{
+        background: '#1f1f2e',
+        borderRadius: '10px',
+        padding: '16px',
+        cursor: 'pointer',
+        border: '1px solid #333',
+      }}
+    >
+      <h3 style={{ marginBottom: '8px' }}>{board.name}</h3>
+
+      <p style={{ color: '#aaa', fontSize: '14px', marginBottom: '12px' }}>
+        {board.description || 'Sem descrição'}
+      </p>
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          fontSize: '14px',
+        }}
+      >
+        <span>📌 Cards: {board.cards_count}</span>
+        <span>👥 Pessoas no board: {board.members_count}</span>
+        <span>🔐 Permissão: {board.my_permission}</span>
+      </div>
     </div>
   );
 }

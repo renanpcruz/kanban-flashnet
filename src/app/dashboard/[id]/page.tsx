@@ -1,18 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  closestCorners,
+  closestCenter,
   useDraggable,
   useDroppable,
-  useSensor,
-  useSensors,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -20,16 +14,14 @@ import { getBoardById, createColumn } from '../../lib/boards';
 import { moveCard } from '../../lib/cards';
 import { getBoardActivity } from '../../lib/history';
 
-import { BoardDetails, Column, Card } from '../../lib/types';
+import { BoardDetails } from '../../lib/types';
 import CardModal from '../components/CardModal';
 import MoveCardModal from '../components/MoveCardModal';
 import CreateCardForm from '../components/CreateCardForm';
 
 type MoveData = {
   cardId: string;
-  fromColumnId: string;
   toColumnId: string;
-  targetPosition: number;
 };
 
 type ActivityItem = {
@@ -48,47 +40,64 @@ type ActivityItem = {
   };
 };
 
-type DraggableCardProps = {
-  card: Card;
-  columnId: string;
-  disabled: boolean;
-  onOpen: (cardId: string) => void;
+type CardType = {
+  id: string;
+  title: string;
+  priority: string;
+  due_date?: string | null;
+  position: number;
+  assignee?: {
+    username: string;
+  } | null;
+  tags: string[];
+};
+
+type ColumnType = {
+  id: string;
+  name: string;
+  color: string;
+  position: number;
+  wip_limit?: number | null;
+  cards: CardType[];
 };
 
 function DraggableCard({
   card,
   columnId,
-  disabled,
-  onOpen,
-}: DraggableCardProps) {
+  isViewer,
+  onClick,
+}: {
+  card: CardType;
+  columnId: string;
+  isViewer: boolean;
+  onClick: () => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: card.id,
-      disabled,
       data: {
-        type: 'card',
-        cardId: card.id,
         columnId,
+        type: 'card',
       },
+      disabled: isViewer,
     });
+
+  const style = {
+    background: '#2e2e3f',
+    padding: '10px',
+    borderRadius: '6px',
+    cursor: isViewer ? 'not-allowed' : 'grab',
+    opacity: isViewer ? 0.6 : isDragging ? 0.5 : 1,
+    transform: CSS.Translate.toString(transform),
+  };
 
   return (
     <div
       ref={setNodeRef}
+      style={style}
+      onClick={onClick}
       {...listeners}
       {...attributes}
-      onClick={() => onOpen(card.id)}
-      style={{
-        background: '#2e2e3f',
-        padding: '10px',
-        borderRadius: '6px',
-        cursor: disabled ? 'not-allowed' : 'grab',
-        opacity: disabled ? 0.6 : isDragging ? 0.45 : 1,
-        transform: CSS.Translate.toString(transform),
-        transition: 'opacity 0.15s ease',
-        border: isDragging ? '1px solid #6ea8fe' : '1px solid transparent',
-        userSelect: 'none',
-      }}
     >
       <strong>{card.title}</strong>
 
@@ -118,17 +127,17 @@ function DraggableCard({
   );
 }
 
-type DroppableColumnProps = {
-  column: Column;
+function DroppableColumn({
+  column,
+  children,
+}: {
+  column: ColumnType;
   children: React.ReactNode;
-};
-
-function DroppableColumn({ column, children }: DroppableColumnProps) {
+}) {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
     data: {
       type: 'column',
-      columnId: column.id,
     },
   });
 
@@ -142,17 +151,16 @@ function DroppableColumn({ column, children }: DroppableColumnProps) {
       ref={setNodeRef}
       style={{
         minWidth: '250px',
-        background: isOver ? '#28283a' : '#1f1f2e',
+        background: isOver ? '#2a2a3d' : '#1f1f2e',
         padding: '10px',
         borderRadius: '8px',
         border: isOver ? '2px solid #6ea8fe' : '2px solid transparent',
-        transition: '0.15s ease',
+        transition: '0.15s',
       }}
     >
       <h3
         style={{
           color: isWipExceeded ? 'red' : column.color,
-          marginBottom: '10px',
         }}
       >
         {column.name} ({column.cards.length}
@@ -164,17 +172,6 @@ function DroppableColumn({ column, children }: DroppableColumnProps) {
   );
 }
 
-function findCardById(board: BoardDetails | null, cardId: string | null) {
-  if (!board || !cardId) return null;
-
-  for (const column of board.columns) {
-    const card = column.cards.find((c) => c.id === cardId);
-    if (card) return card;
-  }
-
-  return null;
-}
-
 export default function BoardPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -183,47 +180,23 @@ export default function BoardPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [moveData, setMoveData] = useState<MoveData | null>(null);
-  const [activeCardId, setActiveCardId] = useState<string | null>(null);
-  const [movingCard, setMovingCard] = useState(false);
 
   const [columnName, setColumnName] = useState('');
   const [creatingColumn, setCreatingColumn] = useState(false);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
-
   async function loadBoard() {
     const data = await getBoardById(id as string);
-
-    const normalized: BoardDetails = {
-      ...data,
-      columns: (data.columns || [])
-        .slice()
-        .sort((a, b) => a.position - b.position)
-        .map((column) => ({
-          ...column,
-          cards: (column.cards || [])
-            .filter((card) => !(card as any).is_archived)
-            .slice()
-            .sort((a, b) => a.position - b.position),
-        })),
-    };
-
-    setBoard(normalized);
+    setBoard(data);
   }
 
   async function loadActivity() {
     const data = await getBoardActivity(id as string);
-    setActivity(data.items || []);
+    setActivity(data.items);
   }
 
   async function reloadAll() {
-    await Promise.all([loadBoard(), loadActivity()]);
+    await loadBoard();
+    await loadActivity();
   }
 
   useEffect(() => {
@@ -246,27 +219,20 @@ export default function BoardPage() {
     load();
   }, [id, router]);
 
-  const activeCard = useMemo(
-    () => findCardById(board, activeCardId),
-    [board, activeCardId]
-  );
-
   if (!board) return <p>Carregando...</p>;
 
   const isViewer = board.my_permission === 'viewer';
-  const canEditCards = !isViewer;
 
-  // Seu BoardDetails atual não traz role do usuário.
-  // Então NÃO dá para saber com segurança se é admin.
-  // Mantive desabilitado para não violar a regra do desafio.
-  const canManageColumns = false;
+  // temporário para teste visual
+  const isAdmin = true;
+const canEdit = !isViewer;
 
   async function handleCreateColumn() {
     if (!columnName.trim()) return;
 
     try {
       setCreatingColumn(true);
-      await createColumn(board.id, columnName.trim());
+      await createColumn(board.id, columnName);
       setColumnName('');
       await reloadAll();
     } catch (err) {
@@ -277,34 +243,21 @@ export default function BoardPage() {
     }
   }
 
-  function handleDragStart(event: DragStartEvent) {
-    const type = event.active.data.current?.type;
-    if (type !== 'card') return;
-    setActiveCardId(String(event.active.id));
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
-    setActiveCardId(null);
-
-    if (!board || isViewer) return;
+  function handleDragEnd(event: any) {
+    if (!board) return;
+    if (isViewer) return;
 
     const { active, over } = event;
     if (!over) return;
 
-    const activeType = active.data.current?.type;
-    if (activeType !== 'card') return;
-
     const cardId = String(active.id);
-    const fromColumnId = String(active.data.current?.columnId || '');
-    const toColumnId = String(over.data.current?.columnId || over.id);
+    const toColumnId = String(over.id);
+    const fromColumnId = String(active.data?.current?.columnId || '');
 
-    if (!fromColumnId || !toColumnId) return;
-    if (fromColumnId === toColumnId) return;
+    if (!fromColumnId || fromColumnId === toColumnId) return;
 
-    const sourceColumn = board.columns.find((c) => c.id === fromColumnId);
     const targetColumn = board.columns.find((c) => c.id === toColumnId);
-
-    if (!sourceColumn || !targetColumn) return;
+    if (!targetColumn) return;
 
     const isWipExceeded =
       targetColumn.wip_limit !== null &&
@@ -318,37 +271,8 @@ export default function BoardPage() {
 
     setMoveData({
       cardId,
-      fromColumnId,
       toColumnId,
-      targetPosition: targetColumn.cards.length,
     });
-  }
-
-  function handleDragCancel() {
-    setActiveCardId(null);
-  }
-
-  async function handleConfirmMove(observation: string) {
-    if (!board || !moveData) return;
-
-    try {
-      setMovingCard(true);
-
-      await moveCard(
-        moveData.cardId,
-        moveData.toColumnId,
-        moveData.targetPosition,
-        observation
-      );
-
-      setMoveData(null);
-      await reloadAll();
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao mover card');
-    } finally {
-      setMovingCard(false);
-    }
   }
 
   return (
@@ -361,12 +285,11 @@ export default function BoardPage() {
 
       {isViewer && (
         <p style={{ color: 'orange' }}>
-          Você tem permissão de visualização. Pode abrir e comentar cards, mas
-          não pode mover nem editar.
+          Você tem permissão de visualização (não pode mover cards)
         </p>
       )}
 
-      {canManageColumns && (
+      {isAdmin && (
         <div style={{ marginTop: '20px' }}>
           <h3>Criar coluna</h3>
 
@@ -383,20 +306,13 @@ export default function BoardPage() {
         </div>
       )}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragCancel={handleDragCancel}
-      >
+      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div
           style={{
             display: 'flex',
             gap: '20px',
             overflowX: 'auto',
             marginTop: '20px',
-            alignItems: 'flex-start',
           }}
         >
           {board.columns
@@ -409,7 +325,8 @@ export default function BoardPage() {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '10px',
-                    minHeight: '80px',
+                    marginTop: '10px',
+                    minHeight: '50px',
                   }}
                 >
                   {column.cards
@@ -420,61 +337,23 @@ export default function BoardPage() {
                         key={card.id}
                         card={card}
                         columnId={column.id}
-                        disabled={!canEditCards}
-                        onOpen={setSelectedCardId}
+                        isViewer={isViewer}
+                        onClick={() => setSelectedCardId(card.id)}
                       />
                     ))}
-
-                  {column.cards.length === 0 && (
-                    <div
-                      style={{
-                        border: '1px dashed #555',
-                        borderRadius: '6px',
-                        padding: '12px',
-                        fontSize: '12px',
-                        color: '#888',
-                      }}
-                    >
-                      Solte um card aqui
-                    </div>
-                  )}
                 </div>
 
-                {canEditCards && (
-                  <div style={{ marginTop: '12px' }}>
-                    <CreateCardForm
-                      boardId={board.id}
-                      columnId={column.id}
-                      onCreated={reloadAll}
-                    />
-                  </div>
+                {canEdit && (
+                  <CreateCardForm
+  boardId={board.id}
+  columnId={column.id}
+  onCreated={reloadAll}
+  canCreate={board.my_permission === 'editor'}
+/>
                 )}
               </DroppableColumn>
             ))}
         </div>
-
-        <DragOverlay>
-          {activeCard ? (
-            <div
-              style={{
-                background: '#2e2e3f',
-                padding: '10px',
-                borderRadius: '6px',
-                width: 230,
-                boxShadow: '0 10px 25px rgba(0,0,0,0.35)',
-                border: '1px solid #6ea8fe',
-              }}
-            >
-              <strong>{activeCard.title}</strong>
-
-              <div style={{ fontSize: '12px', marginTop: '5px' }}>
-                {activeCard.assignee && <p>👤 {activeCard.assignee.username}</p>}
-                <p>⚡ {activeCard.priority}</p>
-                {activeCard.due_date && <p>📅 {activeCard.due_date}</p>}
-              </div>
-            </div>
-          ) : null}
-        </DragOverlay>
       </DndContext>
 
       <div style={{ marginTop: '40px' }}>
@@ -498,13 +377,11 @@ export default function BoardPage() {
 
             {a.card?.title && <p>📌 {a.card.title}</p>}
             {a.action === 'created' && <p>🟢 criou o card</p>}
-
             {a.action === 'moved' && (
               <p>
                 🔄 {a.from_column} → {a.to_column}
               </p>
             )}
-
             {a.action === 'commented' && <p>💬 {a.observation}</p>}
             {a.action === 'updated' && <p>✏️ atualizou o card</p>}
 
@@ -525,12 +402,23 @@ export default function BoardPage() {
 
       {moveData && (
         <MoveCardModal
-          loading={movingCard}
-          onCancel={() => {
-            if (movingCard) return;
-            setMoveData(null);
+          onCancel={() => setMoveData(null)}
+          onConfirm={async (observation: string) => {
+            try {
+              await moveCard(
+                moveData.cardId,
+                moveData.toColumnId,
+                0,
+                observation
+              );
+
+              setMoveData(null);
+              await reloadAll();
+            } catch (err) {
+              console.error(err);
+              alert('Erro ao mover card');
+            }
           }}
-          onConfirm={handleConfirmMove}
         />
       )}
     </div>

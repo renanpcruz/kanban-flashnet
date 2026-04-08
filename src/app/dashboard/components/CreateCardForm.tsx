@@ -7,9 +7,15 @@ type Props = {
   boardId: string;
   columnId: string;
   onCreated: () => Promise<void> | void;
+  canCreate: boolean;
 };
 
-export default function CreateCardForm({ boardId, columnId, onCreated }: Props) {
+export default function CreateCardForm({
+  boardId,
+  columnId,
+  onCreated,
+  canCreate,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -19,6 +25,7 @@ export default function CreateCardForm({ boardId, columnId, onCreated }: Props) 
   const [loading, setLoading] = useState(false);
 
   async function handleCreate() {
+    if (!canCreate) return;
     if (!title.trim()) return;
 
     try {
@@ -45,10 +52,23 @@ export default function CreateCardForm({ boardId, columnId, onCreated }: Props) 
       await onCreated();
     } catch (err) {
       console.error(err);
-      alert('Erro ao criar card');
+      alert((err as Error).message || 'Erro ao criar card');
     } finally {
       setLoading(false);
     }
+  }
+
+  function resetForm() {
+    setOpen(false);
+    setTitle('');
+    setDescription('');
+    setPriority('medium');
+    setDueDate('');
+    setTags('');
+  }
+
+  if (!canCreate) {
+    return null;
   }
 
   if (!open) {
@@ -118,17 +138,7 @@ export default function CreateCardForm({ boardId, columnId, onCreated }: Props) 
           {loading ? 'Criando...' : 'Criar'}
         </button>
 
-        <button
-          onClick={() => {
-            setOpen(false);
-            setTitle('');
-            setDescription('');
-            setPriority('medium');
-            setDueDate('');
-            setTags('');
-          }}
-          disabled={loading}
-        >
+        <button onClick={resetForm} disabled={loading}>
           Cancelar
         </button>
       </div>

@@ -1,12 +1,17 @@
+export type BoardPermission = 'viewer' | 'editor';
+export type CardPriority = 'low' | 'medium' | 'high' | 'critical';
+
+export interface UserRef {
+  id: string;
+  username: string;
+}
+
 export interface Board {
   id: string;
   name: string;
   description: string;
-  owner: {
-    id: string;
-    username: string;
-  };
-  my_permission: string;
+  owner: UserRef;
+  my_permission: BoardPermission;
   members_count: number;
   cards_count: number;
   is_archived: boolean;
@@ -21,11 +26,8 @@ export interface BoardsResponse {
 export interface Card {
   id: string;
   title: string;
-  priority: string;
-  assignee?: {
-    id: string;
-    username: string;
-  } | null;
+  priority: CardPriority;
+  assignee?: UserRef | null;
   position: number;
   due_date?: string | null;
   tags: string[];
@@ -44,6 +46,28 @@ export interface Column {
 export interface BoardDetails {
   id: string;
   name: string;
-  my_permission: string;
+  my_permission: BoardPermission;
   columns: Column[];
+}
+
+export interface CardDetails {
+  id: string;
+  title: string;
+  description?: string | null;
+  column: {
+    id: string;
+    name: string;
+  };
+  board: {
+    id: string;
+    name: string;
+  };
+  priority: CardPriority;
+  assignee?: UserRef | null;
+  position: number;
+  due_date?: string | null;
+  tags: string[];
+  created_by: UserRef;
+  created_at: string;
+  updated_at: string;
 }
