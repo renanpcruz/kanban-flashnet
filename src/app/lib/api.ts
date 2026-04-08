@@ -16,7 +16,6 @@ async function refreshToken() {
   const data = await res.json();
 
   localStorage.setItem('access_token', data.access_token);
-  localStorage.setItem('refresh_token', data.refresh_token);
 
   return data.access_token;
 }
@@ -28,7 +27,7 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
     ...options,
     headers: {
       ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
 
@@ -40,15 +39,16 @@ export async function apiFetch(url: string, options: RequestInit = {}) {
         ...options,
         headers: {
           ...(options.headers || {}),
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
 
       return retry;
     } catch {
-      localStorage.clear();
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       window.location.href = '/login';
-      return;
+      throw new Error('Sessão expirada');
     }
   }
 
