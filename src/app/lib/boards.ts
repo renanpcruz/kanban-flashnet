@@ -17,3 +17,11 @@ export async function getBoardById(id: string): Promise<BoardDetails> {
 
   return res.json();
 }
+
+export async function getBoardActivity(boardId: string) {
+  const res = await apiFetch(`/boards/${boardId}/activity?limit=50`);
+
+  if (!res || !res.ok) throw new Error('Erro ao buscar atividade');
+
+  return res.json();
+}
