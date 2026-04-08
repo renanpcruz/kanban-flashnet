@@ -25,10 +25,11 @@ export interface Card {
   assignee?: {
     id: string;
     username: string;
-  };
+  } | null;
   position: number;
-  due_date: string;
+  due_date?: string | null;
   tags: string[];
+  is_archived?: boolean;
 }
 
 export interface Column {

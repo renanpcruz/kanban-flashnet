@@ -1,21 +1,35 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { DndContext, closestCenter } from '@dnd-kit/core';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  closestCorners,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 
 import { getBoardById, createColumn } from '../../lib/boards';
 import { moveCard } from '../../lib/cards';
 import { getBoardActivity } from '../../lib/history';
 
-import { BoardDetails } from '../../lib/types';
+import { BoardDetails, Column, Card } from '../../lib/types';
 import CardModal from '../components/CardModal';
 import MoveCardModal from '../components/MoveCardModal';
 import CreateCardForm from '../components/CreateCardForm';
 
 type MoveData = {
   cardId: string;
+  fromColumnId: string;
   toColumnId: string;
+  targetPosition: number;
 };
 
 type ActivityItem = {
@@ -34,6 +48,133 @@ type ActivityItem = {
   };
 };
 
+type DraggableCardProps = {
+  card: Card;
+  columnId: string;
+  disabled: boolean;
+  onOpen: (cardId: string) => void;
+};
+
+function DraggableCard({
+  card,
+  columnId,
+  disabled,
+  onOpen,
+}: DraggableCardProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: card.id,
+      disabled,
+      data: {
+        type: 'card',
+        cardId: card.id,
+        columnId,
+      },
+    });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={() => onOpen(card.id)}
+      style={{
+        background: '#2e2e3f',
+        padding: '10px',
+        borderRadius: '6px',
+        cursor: disabled ? 'not-allowed' : 'grab',
+        opacity: disabled ? 0.6 : isDragging ? 0.45 : 1,
+        transform: CSS.Translate.toString(transform),
+        transition: 'opacity 0.15s ease',
+        border: isDragging ? '1px solid #6ea8fe' : '1px solid transparent',
+        userSelect: 'none',
+      }}
+    >
+      <strong>{card.title}</strong>
+
+      <div style={{ fontSize: '12px', marginTop: '5px' }}>
+        {card.assignee && <p>👤 {card.assignee.username}</p>}
+        <p>⚡ {card.priority}</p>
+        {card.due_date && <p>📅 {card.due_date}</p>}
+      </div>
+
+      <div style={{ marginTop: '5px' }}>
+        {card.tags.map((tag, i) => (
+          <span
+            key={i}
+            style={{
+              fontSize: '10px',
+              background: '#555',
+              padding: '2px 6px',
+              marginRight: '5px',
+              borderRadius: '4px',
+            }}
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+type DroppableColumnProps = {
+  column: Column;
+  children: React.ReactNode;
+};
+
+function DroppableColumn({ column, children }: DroppableColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: column.id,
+    data: {
+      type: 'column',
+      columnId: column.id,
+    },
+  });
+
+  const isWipExceeded =
+    column.wip_limit !== null &&
+    column.wip_limit !== undefined &&
+    column.cards.length >= column.wip_limit;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        minWidth: '250px',
+        background: isOver ? '#28283a' : '#1f1f2e',
+        padding: '10px',
+        borderRadius: '8px',
+        border: isOver ? '2px solid #6ea8fe' : '2px solid transparent',
+        transition: '0.15s ease',
+      }}
+    >
+      <h3
+        style={{
+          color: isWipExceeded ? 'red' : column.color,
+          marginBottom: '10px',
+        }}
+      >
+        {column.name} ({column.cards.length}
+        {column.wip_limit ? ` / ${column.wip_limit}` : ''})
+      </h3>
+
+      {children}
+    </div>
+  );
+}
+
+function findCardById(board: BoardDetails | null, cardId: string | null) {
+  if (!board || !cardId) return null;
+
+  for (const column of board.columns) {
+    const card = column.cards.find((c) => c.id === cardId);
+    if (card) return card;
+  }
+
+  return null;
+}
+
 export default function BoardPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -42,23 +183,47 @@ export default function BoardPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [moveData, setMoveData] = useState<MoveData | null>(null);
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [movingCard, setMovingCard] = useState(false);
 
   const [columnName, setColumnName] = useState('');
   const [creatingColumn, setCreatingColumn] = useState(false);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
   async function loadBoard() {
     const data = await getBoardById(id as string);
-    setBoard(data);
+
+    const normalized: BoardDetails = {
+      ...data,
+      columns: (data.columns || [])
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((column) => ({
+          ...column,
+          cards: (column.cards || [])
+            .filter((card) => !(card as any).is_archived)
+            .slice()
+            .sort((a, b) => a.position - b.position),
+        })),
+    };
+
+    setBoard(normalized);
   }
 
   async function loadActivity() {
     const data = await getBoardActivity(id as string);
-    setActivity(data.items);
+    setActivity(data.items || []);
   }
 
   async function reloadAll() {
-    await loadBoard();
-    await loadActivity();
+    await Promise.all([loadBoard(), loadActivity()]);
   }
 
   useEffect(() => {
@@ -81,24 +246,27 @@ export default function BoardPage() {
     load();
   }, [id, router]);
 
+  const activeCard = useMemo(
+    () => findCardById(board, activeCardId),
+    [board, activeCardId]
+  );
+
   if (!board) return <p>Carregando...</p>;
 
-  console.log('PERMISSION:', board.my_permission);
-
   const isViewer = board.my_permission === 'viewer';
+  const canEditCards = !isViewer;
 
-  // temporário para teste visual
-  const isAdmin = true;
-  const canEdit = true;
+  // Seu BoardDetails atual não traz role do usuário.
+  // Então NÃO dá para saber com segurança se é admin.
+  // Mantive desabilitado para não violar a regra do desafio.
+  const canManageColumns = false;
 
   async function handleCreateColumn() {
     if (!columnName.trim()) return;
 
     try {
       setCreatingColumn(true);
-
-      await createColumn(board.id, columnName);
-
+      await createColumn(board.id, columnName.trim());
       setColumnName('');
       await reloadAll();
     } catch (err) {
@@ -109,21 +277,34 @@ export default function BoardPage() {
     }
   }
 
-  function handleDragEnd(event: any) {
-    if (!board) return;
-    if (isViewer) return;
+  function handleDragStart(event: DragStartEvent) {
+    const type = event.active.data.current?.type;
+    if (type !== 'card') return;
+    setActiveCardId(String(event.active.id));
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveCardId(null);
+
+    if (!board || isViewer) return;
 
     const { active, over } = event;
     if (!over) return;
 
-    const cardId = String(active.id);
-    const toColumnId = String(over.id);
+    const activeType = active.data.current?.type;
+    if (activeType !== 'card') return;
 
-    const fromColumnId = active.data?.current?.columnId;
+    const cardId = String(active.id);
+    const fromColumnId = String(active.data.current?.columnId || '');
+    const toColumnId = String(over.data.current?.columnId || over.id);
+
+    if (!fromColumnId || !toColumnId) return;
     if (fromColumnId === toColumnId) return;
 
+    const sourceColumn = board.columns.find((c) => c.id === fromColumnId);
     const targetColumn = board.columns.find((c) => c.id === toColumnId);
-    if (!targetColumn) return;
+
+    if (!sourceColumn || !targetColumn) return;
 
     const isWipExceeded =
       targetColumn.wip_limit !== null &&
@@ -137,8 +318,37 @@ export default function BoardPage() {
 
     setMoveData({
       cardId,
+      fromColumnId,
       toColumnId,
+      targetPosition: targetColumn.cards.length,
     });
+  }
+
+  function handleDragCancel() {
+    setActiveCardId(null);
+  }
+
+  async function handleConfirmMove(observation: string) {
+    if (!board || !moveData) return;
+
+    try {
+      setMovingCard(true);
+
+      await moveCard(
+        moveData.cardId,
+        moveData.toColumnId,
+        moveData.targetPosition,
+        observation
+      );
+
+      setMoveData(null);
+      await reloadAll();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao mover card');
+    } finally {
+      setMovingCard(false);
+    }
   }
 
   return (
@@ -151,11 +361,12 @@ export default function BoardPage() {
 
       {isViewer && (
         <p style={{ color: 'orange' }}>
-          Você tem permissão de visualização (não pode mover cards)
+          Você tem permissão de visualização. Pode abrir e comentar cards, mas
+          não pode mover nem editar.
         </p>
       )}
 
-      {isAdmin && (
+      {canManageColumns && (
         <div style={{ marginTop: '20px' }}>
           <h3>Criar coluna</h3>
 
@@ -172,108 +383,98 @@ export default function BoardPage() {
         </div>
       )}
 
-      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
         <div
           style={{
             display: 'flex',
             gap: '20px',
             overflowX: 'auto',
             marginTop: '20px',
+            alignItems: 'flex-start',
           }}
         >
           {board.columns
             .slice()
             .sort((a, b) => a.position - b.position)
-            .map((column) => {
-              const isWipExceeded =
-                column.wip_limit !== null &&
-                column.wip_limit !== undefined &&
-                column.cards.length >= column.wip_limit;
-
-              return (
+            .map((column) => (
+              <DroppableColumn key={column.id} column={column}>
                 <div
-                  key={column.id}
-                  id={column.id}
                   style={{
-                    minWidth: '250px',
-                    background: '#1f1f2e',
-                    padding: '10px',
-                    borderRadius: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    minHeight: '80px',
                   }}
                 >
-                  <h3
-                    style={{
-                      color: isWipExceeded ? 'red' : column.color,
-                    }}
-                  >
-                    {column.name} ({column.cards.length}
-                    {column.wip_limit ? ` / ${column.wip_limit}` : ''})
-                  </h3>
+                  {column.cards
+                    .slice()
+                    .sort((a, b) => a.position - b.position)
+                    .map((card) => (
+                      <DraggableCard
+                        key={card.id}
+                        card={card}
+                        columnId={column.id}
+                        disabled={!canEditCards}
+                        onOpen={setSelectedCardId}
+                      />
+                    ))}
 
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '10px',
-                      marginTop: '10px',
-                    }}
-                  >
-                    {column.cards
-                      .slice()
-                      .sort((a, b) => a.position - b.position)
-                      .map((card) => (
-                        <div
-                          key={card.id}
-                          id={card.id}
-                          data-column-id={column.id}
-                          onClick={() => setSelectedCardId(card.id)}
-                          style={{
-                            background: '#2e2e3f',
-                            padding: '10px',
-                            borderRadius: '6px',
-                            cursor: isViewer ? 'not-allowed' : 'grab',
-                            opacity: isViewer ? 0.6 : 1,
-                          }}
-                        >
-                          <strong>{card.title}</strong>
+                  {column.cards.length === 0 && (
+                    <div
+                      style={{
+                        border: '1px dashed #555',
+                        borderRadius: '6px',
+                        padding: '12px',
+                        fontSize: '12px',
+                        color: '#888',
+                      }}
+                    >
+                      Solte um card aqui
+                    </div>
+                  )}
+                </div>
 
-                          <div style={{ fontSize: '12px', marginTop: '5px' }}>
-                            {card.assignee && <p>👤 {card.assignee.username}</p>}
-                            <p>⚡ {card.priority}</p>
-                            {card.due_date && <p>📅 {card.due_date}</p>}
-                          </div>
-
-                          <div style={{ marginTop: '5px' }}>
-                            {card.tags.map((tag, i) => (
-                              <span
-                                key={i}
-                                style={{
-                                  fontSize: '10px',
-                                  background: '#555',
-                                  padding: '2px 6px',
-                                  marginRight: '5px',
-                                  borderRadius: '4px',
-                                }}
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-
-                  {canEdit && (
+                {canEditCards && (
+                  <div style={{ marginTop: '12px' }}>
                     <CreateCardForm
                       boardId={board.id}
                       columnId={column.id}
                       onCreated={reloadAll}
                     />
-                  )}
-                </div>
-              );
-            })}
+                  </div>
+                )}
+              </DroppableColumn>
+            ))}
         </div>
+
+        <DragOverlay>
+          {activeCard ? (
+            <div
+              style={{
+                background: '#2e2e3f',
+                padding: '10px',
+                borderRadius: '6px',
+                width: 230,
+                boxShadow: '0 10px 25px rgba(0,0,0,0.35)',
+                border: '1px solid #6ea8fe',
+              }}
+            >
+              <strong>{activeCard.title}</strong>
+
+              <div style={{ fontSize: '12px', marginTop: '5px' }}>
+                {activeCard.assignee && <p>👤 {activeCard.assignee.username}</p>}
+                <p>⚡ {activeCard.priority}</p>
+                {activeCard.due_date && <p>📅 {activeCard.due_date}</p>}
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       <div style={{ marginTop: '40px' }}>
@@ -296,7 +497,6 @@ export default function BoardPage() {
             </p>
 
             {a.card?.title && <p>📌 {a.card.title}</p>}
-
             {a.action === 'created' && <p>🟢 criou o card</p>}
 
             {a.action === 'moved' && (
@@ -306,13 +506,10 @@ export default function BoardPage() {
             )}
 
             {a.action === 'commented' && <p>💬 {a.observation}</p>}
-
             {a.action === 'updated' && <p>✏️ atualizou o card</p>}
 
             {a.observation && a.action !== 'commented' && (
-              <p style={{ fontStyle: 'italic' }}>
-                "{a.observation}"
-              </p>
+              <p style={{ fontStyle: 'italic' }}>"{a.observation}"</p>
             )}
           </div>
         ))}
@@ -322,28 +519,18 @@ export default function BoardPage() {
         <CardModal
           cardId={selectedCardId}
           onClose={() => setSelectedCardId(null)}
+          onArchived={reloadAll}
         />
       )}
 
       {moveData && (
         <MoveCardModal
-          onCancel={() => setMoveData(null)}
-          onConfirm={async (observation: string) => {
-            try {
-              await moveCard(
-                moveData.cardId,
-                moveData.toColumnId,
-                0,
-                observation
-              );
-
-              setMoveData(null);
-              await reloadAll();
-            } catch (err) {
-              console.error(err);
-              alert('Erro ao mover card');
-            }
+          loading={movingCard}
+          onCancel={() => {
+            if (movingCard) return;
+            setMoveData(null);
           }}
+          onConfirm={handleConfirmMove}
         />
       )}
     </div>

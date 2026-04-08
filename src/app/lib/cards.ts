@@ -77,3 +77,41 @@ export async function createCard(
 
   return res.json();
 }
+
+export async function updateCard(
+  cardId: string,
+  payload: {
+    title?: string;
+    description?: string;
+    priority?: string;
+    assignee_id?: string;
+    due_date?: string;
+    tags?: string[];
+  }
+) {
+  const res = await apiFetch(`/cards/${cardId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res || !res.ok) {
+    throw new Error('Erro ao atualizar card');
+  }
+
+  return res.json();
+}
+
+export async function archiveCard(cardId: string) {
+  const res = await apiFetch(`/cards/${cardId}`, {
+    method: 'DELETE',
+  });
+
+  if (!res || !res.ok) {
+    throw new Error('Erro ao arquivar card');
+  }
+
+  return res.json();
+}
