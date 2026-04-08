@@ -79,8 +79,15 @@ export async function createColumn(
     }),
   });
 
-  if (!res || !res.ok) {
-    throw new Error(await getErrorMessage(res, 'Erro ao criar coluna'));
+  if (!res) {
+    throw new Error('Sem resposta da API ao criar coluna');
+  }
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('CREATE COLUMN STATUS:', res.status);
+    console.error('CREATE COLUMN BODY:', text);
+    throw new Error(text || `Erro ao criar coluna (status ${res.status})`);
   }
 
   return res.json();

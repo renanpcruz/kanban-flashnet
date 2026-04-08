@@ -232,7 +232,11 @@ const canEdit = !isViewer;
 
     try {
       setCreatingColumn(true);
-      await createColumn(board.id, columnName);
+      await createColumn(
+  board.id,
+  columnName.trim(),
+  board.columns.length
+);
       setColumnName('');
       await reloadAll();
     } catch (err) {
