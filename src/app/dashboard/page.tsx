@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import styles from './DashboardPage.module.css';
 import { getBoards, createBoard } from '../lib/boards';
+import { getMe } from '../lib/auth';
+import Sidebar from '../components/dashboard/Sidebar/Sidebar';
+import BoardCard from '../components/dashboard/BoardCard/BoardCard';
 
 type Board = {
   id: string;
@@ -13,10 +17,21 @@ type Board = {
   my_permission: string;
 };
 
+type Me = {
+  id: string;
+  username: string;
+  email: string;
+  role: 'admin' | 'member';
+  is_active: boolean;
+  created_at: string;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
 
   const [boards, setBoards] = useState<Board[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,16 +41,21 @@ export default function DashboardPage() {
       const token = localStorage.getItem('access_token');
 
       if (!token) {
-        router.push('/login');
+        router.replace('/login');
         return;
       }
 
       try {
-        const data = await getBoards();
-        setBoards(data.items);
+        const [boardsData, meData] = await Promise.all([
+          getBoards(),
+          getMe(),
+        ]);
+
+        setBoards(boardsData.items);
+        setMe(meData);
       } catch (err) {
         console.error(err);
-        router.push('/login');
+        router.replace('/login');
       }
     }
 
@@ -44,90 +64,98 @@ export default function DashboardPage() {
 
   async function handleCreateBoard() {
     if (!name.trim()) return;
+    if (me?.role !== 'admin') return;
 
     try {
       setLoading(true);
 
-      const newBoard = await createBoard(name, description);
+      await createBoard(name.trim(), description.trim() || undefined);
 
-      setBoards((prev) => [newBoard, ...prev]);
+      const data = await getBoards();
+      setBoards(data.items);
 
       setName('');
       setDescription('');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-
-      if (err?.message?.includes('403')) {
-        alert('Apenas admin pode criar boards');
-      } else {
-        alert(err?.message || 'Erro ao criar board');
-      }
+      alert((err as Error).message || 'Erro ao criar board');
     } finally {
       setLoading(false);
     }
   }
 
+  function handleLogout() {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    router.replace('/login');
+  }
+
+  const isAdmin = me?.role === 'admin';
+
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Dashboard</h1>
+    <div className={styles.page}>
+      <Sidebar
+        username={me?.username || 'Usuário'}
+        onLogout={handleLogout}
+      />
 
-      <div style={{ marginBottom: '20px' }}>
-        <h2>Criar novo board</h2>
+      <main className={styles.main}>
+        <div className={styles.header}>
+          <h2 className={styles.greeting}>
+            Olá, {me?.username || 'Usuário'}
+          </h2>
+          <h1 className={styles.title}>Seus quadros</h1>
+        </div>
 
-        <input
-          placeholder="Nome do board"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          style={{ marginRight: '10px' }}
-        />
+        {isAdmin && (
+          <div className={styles.createBoardBox}>
+            <h3 className={styles.createBoardTitle}>Criar novo board</h3>
 
-        <input
-          placeholder="Descrição"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          style={{ marginRight: '10px' }}
-        />
+            <div className={styles.createBoardRow}>
+              <input
+                className={styles.input}
+                placeholder="Nome do board"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
 
-        <button onClick={handleCreateBoard} disabled={loading}>
-          {loading ? 'Criando...' : 'Criar'}
-        </button>
-      </div>
+              <input
+                className={styles.input}
+                placeholder="Descrição"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-        {boards.map((board) => (
-          <div
-            key={board.id}
-            onClick={() => router.push(`/dashboard/${board.id}`)}
-            style={{
-              border: '1px solid #ccc',
-              padding: '15px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              width: '240px',
-              background: '#1f1f2e',
-            }}
-          >
-            <h3 style={{ marginBottom: '8px' }}>{board.name}</h3>
-
-            <p style={{ fontSize: '12px', color: '#bbb', marginBottom: '12px' }}>
-              {board.description || 'Sem descrição'}
-            </p>
-
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px',
-                fontSize: '14px',
-              }}
-            >
-              <span>📌 Cards: {board.cards_count}</span>
-              <span>👥 Pessoas: {board.members_count}</span>
-              <span>🔐 Permissão: {board.my_permission}</span>
+              <button
+                className={styles.primaryButton}
+                onClick={handleCreateBoard}
+                disabled={loading}
+              >
+                {loading ? 'Criando...' : 'Criar'}
+              </button>
             </div>
           </div>
-        ))}
-      </div>
+        )}
+
+        <div className={styles.boardList}>
+          {boards.length === 0 && (
+            <p className={styles.empty}>Nenhum board encontrado.</p>
+          )}
+
+          {boards.map((board) => (
+            <BoardCard
+              key={board.id}
+              id={board.id}
+              name={board.name}
+              description={board.description}
+              cardsCount={board.cards_count}
+              membersCount={board.members_count}
+              permission={board.my_permission}
+              onClick={() => router.push(`/dashboard/${board.id}`)}
+            />
+          ))}
+        </div>
+      </main>
     </div>
   );
 }

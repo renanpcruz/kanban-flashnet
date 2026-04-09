@@ -18,6 +18,10 @@ import { BoardDetails } from '../../lib/types';
 import CardModal from '../components/CardModal';
 import MoveCardModal from '../components/MoveCardModal';
 import CreateCardForm from '../components/CreateCardForm';
+import styles from './BoardPage.module.css';
+
+import Sidebar from '../../components/dashboard/Sidebar/Sidebar';
+import { getMe } from '../../lib/auth';
 
 type MoveData = {
   cardId: string;
@@ -83,42 +87,30 @@ function DraggableCard({
     });
 
   const style = {
-    background: '#2e2e3f',
-    padding: '10px',
-    borderRadius: '6px',
-    cursor: isViewer ? 'not-allowed' : 'grab',
-    opacity: isViewer ? 0.6 : isDragging ? 0.5 : 1,
     transform: CSS.Translate.toString(transform),
+    cursor: isViewer ? 'not-allowed' : 'grab',
   };
 
   return (
     <div
       ref={setNodeRef}
+      className={`${styles.card} ${isDragging ? styles.cardDragging : ''}`}
       style={style}
       onClick={onClick}
       {...listeners}
       {...attributes}
     >
-      <strong>{card.title}</strong>
+      <h4 className={styles.cardTitle}>{card.title}</h4>
 
-      <div style={{ fontSize: '12px', marginTop: '5px' }}>
+      <div className={styles.cardMeta}>
         {card.assignee && <p>👤 {card.assignee.username}</p>}
         <p>⚡ {card.priority}</p>
         {card.due_date && <p>📅 {card.due_date}</p>}
       </div>
 
-      <div style={{ marginTop: '5px' }}>
+      <div style={{ marginTop: '8px' }}>
         {card.tags.map((tag, i) => (
-          <span
-            key={i}
-            style={{
-              fontSize: '10px',
-              background: '#555',
-              padding: '2px 6px',
-              marginRight: '5px',
-              borderRadius: '4px',
-            }}
-          >
+          <span key={i} className={styles.tag}>
             {tag}
           </span>
         ))}
@@ -149,19 +141,11 @@ function DroppableColumn({
   return (
     <div
       ref={setNodeRef}
-      style={{
-        minWidth: '250px',
-        background: isOver ? '#2a2a3d' : '#1f1f2e',
-        padding: '10px',
-        borderRadius: '8px',
-        border: isOver ? '2px solid #6ea8fe' : '2px solid transparent',
-        transition: '0.15s',
-      }}
+      className={`${styles.column} ${isOver ? styles.columnHover : ''}`}
     >
       <h3
-        style={{
-          color: isWipExceeded ? 'red' : column.color,
-        }}
+        className={styles.columnTitle}
+        style={{ color: isWipExceeded ? '#dc2626' : '#0f4675' }}
       >
         {column.name} ({column.cards.length}
         {column.wip_limit ? ` / ${column.wip_limit}` : ''})
@@ -183,6 +167,15 @@ export default function BoardPage() {
 
   const [columnName, setColumnName] = useState('');
   const [creatingColumn, setCreatingColumn] = useState(false);
+
+  const [me, setMe] = useState<{
+  id: string;
+  username: string;
+  email: string;
+  role: 'admin' | 'member';
+  is_active: boolean;
+  created_at: string;
+} | null>(null);
 
   async function loadBoard() {
     const data = await getBoardById(id as string);
@@ -209,7 +202,12 @@ export default function BoardPage() {
       }
 
       try {
-        await reloadAll();
+        const [meData] = await Promise.all([
+  getMe(),
+  reloadAll(),
+]);
+
+setMe(meData);
       } catch (err) {
         console.error(err);
         router.push('/login');
@@ -219,29 +217,31 @@ export default function BoardPage() {
     load();
   }, [id, router]);
 
-  if (!board) return <p>Carregando...</p>;
+  if (!board) return <p className={styles.loading}>Carregando...</p>;
 
   const isViewer = board.my_permission === 'viewer';
+  const canEdit = !isViewer;
 
-  // temporário para teste visual
-  const isAdmin = true;
-const canEdit = !isViewer;
+  // Ligue isso ao role real quando buscar /auth/me
+  const canManageColumns = false;
 
   async function handleCreateColumn() {
     if (!columnName.trim()) return;
 
     try {
       setCreatingColumn(true);
+
       await createColumn(
-  board.id,
-  columnName.trim(),
-  board.columns.length
-);
+        board.id,
+        columnName.trim(),
+        board.columns.length
+      );
+
       setColumnName('');
       await reloadAll();
     } catch (err) {
       console.error(err);
-      alert('Erro ao criar coluna');
+      alert((err as Error).message || 'Erro ao criar coluna');
     } finally {
       setCreatingColumn(false);
     }
@@ -279,60 +279,65 @@ const canEdit = !isViewer;
     });
   }
 
+  function handleLogout() {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  router.push('/login');
+}
+
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>{board.name}</h1>
+  <div className={styles.layout}>
+    <Sidebar
+      username={me?.username || 'Usuário'}
+      onLogout={handleLogout}
+    />
 
-      <p style={{ fontSize: '12px', color: '#aaa' }}>
-        Permissão atual: {board.my_permission}
-      </p>
+    <main className={styles.page}>
+      <div className={styles.header}>
+        <h1 className={styles.title}>{board.name}</h1>
 
-      {isViewer && (
-        <p style={{ color: 'orange' }}>
-          Você tem permissão de visualização (não pode mover cards)
+        <p className={styles.permission}>
+          Permissão: {board.my_permission}
         </p>
-      )}
 
-      {isAdmin && (
-        <div style={{ marginTop: '20px' }}>
-          <h3>Criar coluna</h3>
+        {isViewer && (
+          <p className={styles.warning}>
+            Você só pode visualizar este board.
+          </p>
+        )}
+      </div>
 
-          <input
-            placeholder="Nome da coluna"
-            value={columnName}
-            onChange={(e) => setColumnName(e.target.value)}
-            style={{ marginRight: '10px' }}
-          />
+      {canManageColumns && (
+        <div className={styles.createColumnBox}>
+          <h3 className={styles.createColumnTitle}>Criar coluna</h3>
 
-          <button onClick={handleCreateColumn} disabled={creatingColumn}>
-            {creatingColumn ? 'Criando...' : 'Criar'}
-          </button>
+          <div className={styles.createColumnRow}>
+            <input
+              className={styles.input}
+              placeholder="Nome da coluna"
+              value={columnName}
+              onChange={(e) => setColumnName(e.target.value)}
+            />
+
+            <button
+              className={styles.primaryButton}
+              onClick={handleCreateColumn}
+              disabled={creatingColumn}
+            >
+              {creatingColumn ? 'Criando...' : 'Criar'}
+            </button>
+          </div>
         </div>
       )}
 
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div
-          style={{
-            display: 'flex',
-            gap: '20px',
-            overflowX: 'auto',
-            marginTop: '20px',
-          }}
-        >
+        <div className={styles.columns}>
           {board.columns
             .slice()
             .sort((a, b) => a.position - b.position)
             .map((column) => (
               <DroppableColumn key={column.id} column={column}>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px',
-                    marginTop: '10px',
-                    minHeight: '50px',
-                  }}
-                >
+                <div className={styles.cardsList}>
                   {column.cards
                     .slice()
                     .sort((a, b) => a.position - b.position)
@@ -348,34 +353,32 @@ const canEdit = !isViewer;
                 </div>
 
                 {canEdit && (
-                  <CreateCardForm
-  boardId={board.id}
-  columnId={column.id}
-  onCreated={reloadAll}
-  canCreate={board.my_permission === 'editor'}
-/>
+                  <div style={{ marginTop: '12px' }}>
+                    <CreateCardForm
+                      boardId={board.id}
+                      columnId={column.id}
+                      onCreated={reloadAll}
+                      canCreate={board.my_permission === 'editor'}
+                    />
+                  </div>
                 )}
               </DroppableColumn>
             ))}
         </div>
       </DndContext>
 
-      <div style={{ marginTop: '40px' }}>
-        <h2>Atividade recente</h2>
+      <div className={styles.activitySection}>
+        <h2 className={styles.activityTitle}>Atividade recente</h2>
 
-        {activity.length === 0 && <p>Sem atividade</p>}
+        {activity.length === 0 && (
+          <p className={styles.emptyActivity}>Sem atividade</p>
+        )}
 
         {activity.map((a) => (
-          <div
-            key={a.id}
-            style={{
-              borderBottom: '1px solid #444',
-              padding: '10px 0',
-            }}
-          >
+          <div key={a.id} className={styles.activityItem}>
             <strong>{a.performed_by?.username || 'Sistema'}</strong>
 
-            <p style={{ fontSize: '12px', color: '#aaa' }}>
+            <p className={styles.activityDate}>
               {new Date(a.created_at).toLocaleString()}
             </p>
 
@@ -390,7 +393,9 @@ const canEdit = !isViewer;
             {a.action === 'updated' && <p>✏️ atualizou o card</p>}
 
             {a.observation && a.action !== 'commented' && (
-              <p style={{ fontStyle: 'italic' }}>"{a.observation}"</p>
+              <p className={styles.activityObservation}>
+                "{a.observation}"
+              </p>
             )}
           </div>
         ))}
@@ -420,11 +425,12 @@ const canEdit = !isViewer;
               await reloadAll();
             } catch (err) {
               console.error(err);
-              alert('Erro ao mover card');
+              alert((err as Error).message || 'Erro ao mover card');
             }
           }}
         />
       )}
-    </div>
-  );
+    </main>
+  </div>
+);
 }

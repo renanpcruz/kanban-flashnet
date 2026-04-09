@@ -1,0 +1,45 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #eef2f6, #dde5ec);
+  padding: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 36px 32px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+}
+
+.title {
+  margin: 0 0 28px;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: #0f3d5c;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.error {
+  margin: 0;
+  font-size: 14px;
+  color: #c0392b;
+}
+
+.forgotPassword {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 14px;
+  color: #0f3d5c;
+  cursor: pointer;
+}

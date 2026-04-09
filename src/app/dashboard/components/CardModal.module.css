@@ -1,0 +1,97 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 70, 117, 0.25);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal {
+  width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+}
+
+.title {
+  color: #0f4675;
+}
+
+.description {
+  color: #64748b;
+}
+
+.meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.tags {
+  margin-top: 10px;
+}
+
+.tag {
+  background: #dbe3ea;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-right: 4px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.primary {
+  background: #0f4675;
+  color: white;
+  border-radius: 999px;
+  padding: 10px 16px;
+}
+
+.secondary {
+  background: #dbe3ea;
+  color: #0f4675;
+  border-radius: 999px;
+  padding: 10px 16px;
+}
+
+.danger {
+  background: #dc2626;
+  color: white;
+  border-radius: 999px;
+  padding: 10px 16px;
+}
+
+.section {
+  margin-top: 20px;
+}
+
+.historyItem {
+  border-bottom: 1px solid #eee;
+  padding: 8px 0;
+}
+
+.date {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+}
+
+.close {
+  margin-top: 16px;
+}

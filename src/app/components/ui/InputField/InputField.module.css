@@ -1,0 +1,31 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f3d5c;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d7dde4;
+  border-radius: 10px;
+  background: #f5f7fa;
+  color: #123b5a;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input::placeholder {
+  color: #7a8b99;
+}
+
+.input:focus {
+  border-color: #0f3d5c;
+  box-shadow: 0 0 0 3px rgba(15, 61, 92, 0.12);
+}

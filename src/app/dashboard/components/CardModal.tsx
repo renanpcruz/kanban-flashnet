@@ -5,9 +5,10 @@ import {
   getCardById,
   addComment,
   updateCard,
-  archiveCard
+  archiveCard,
 } from '../../lib/cards';
 import { getCardHistory } from '../../lib/history';
+import styles from './CardModal.module.css';
 
 type Props = {
   cardId: string;
@@ -28,236 +29,118 @@ export default function CardModal({ cardId, onClose, onArchived }: Props) {
   const [editDueDate, setEditDueDate] = useState('');
   const [editTags, setEditTags] = useState('');
 
-  async function loadHistory() {
-    try {
-      const historyData = await getCardHistory(cardId);
-      setHistory(historyData.items);
-    } catch (err) {
-      console.error(err);
+  async function loadAll(sync = false) {
+    const cardData = await getCardById(cardId);
+    setCard(cardData);
+
+    if (sync) {
+      setEditTitle(cardData.title || '');
+      setEditDescription(cardData.description || '');
+      setEditPriority(cardData.priority || 'medium');
+      setEditDueDate(cardData.due_date || '');
+      setEditTags(cardData.tags?.join(', ') || '');
     }
-  }
 
-  async function loadCard(syncForm = false) {
-    try {
-      const cardData = await getCardById(cardId);
-      setCard(cardData);
-
-      if (syncForm) {
-        setEditTitle(cardData.title || '');
-        setEditDescription(cardData.description || '');
-        setEditPriority(cardData.priority || 'medium');
-        setEditDueDate(cardData.due_date || '');
-        setEditTags(Array.isArray(cardData.tags) ? cardData.tags.join(', ') : '');
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  async function loadAll(syncForm = false) {
-    await loadCard(syncForm);
-    await loadHistory();
+    const historyData = await getCardHistory(cardId);
+    setHistory(historyData.items);
   }
 
   useEffect(() => {
     loadAll(true);
   }, [cardId]);
 
-  useEffect(() => {
-    if (editing) return;
-
-    const interval = setInterval(() => {
-      loadAll(false);
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [cardId, editing]);
-
   async function handleComment() {
-    if (comment.trim().length < 10) {
-      alert('Comentário deve ter pelo menos 10 caracteres');
-      return;
-    }
+    if (comment.trim().length < 10) return;
 
-    try {
-      setLoading(true);
-      await addComment(cardId, comment);
-      setComment('');
-      await loadAll(false);
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao comentar');
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    await addComment(cardId, comment);
+    setComment('');
+    await loadAll();
+    setLoading(false);
   }
 
   async function handleSaveEdit() {
-    if (!editTitle.trim()) {
-      alert('Título é obrigatório');
-      return;
-    }
+    setLoading(true);
 
-    try {
-      setLoading(true);
+    await updateCard(cardId, {
+      title: editTitle,
+      description: editDescription,
+      priority: editPriority,
+      due_date: editDueDate,
+      tags: editTags.split(',').map((t) => t.trim()).filter(Boolean),
+    });
 
-      await updateCard(cardId, {
-        title: editTitle.trim(),
-        description: editDescription.trim() || '',
-        priority: editPriority,
-        due_date: editDueDate || '',
-        tags: editTags
-          .split(',')
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-      });
-
-      setEditing(false);
-      await loadAll(true);
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao atualizar card');
-    } finally {
-      setLoading(false);
-    }
+    setEditing(false);
+    await loadAll(true);
+    setLoading(false);
   }
 
   async function handleArchive() {
-    const confirmed = window.confirm('Tem certeza que deseja arquivar este card?');
-    if (!confirmed) return;
+    if (!confirm('Arquivar card?')) return;
 
-    try {
-      setLoading(true);
-
-      await archiveCard(cardId);
-
-      if (onArchived) {
-        await onArchived();
-      }
-
-      onClose();
-    } catch (err) {
-      console.error(err);
-      alert('Erro ao arquivar card');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleStartEdit() {
-    if (!card) return;
-
-    setEditTitle(card.title || '');
-    setEditDescription(card.description || '');
-    setEditPriority(card.priority || 'medium');
-    setEditDueDate(card.due_date || '');
-    setEditTags(Array.isArray(card.tags) ? card.tags.join(', ') : '');
-    setEditing(true);
-  }
-
-  function handleCancelEdit() {
-    setEditing(false);
-
-    if (!card) return;
-
-    setEditTitle(card.title || '');
-    setEditDescription(card.description || '');
-    setEditPriority(card.priority || 'medium');
-    setEditDueDate(card.due_date || '');
-    setEditTags(Array.isArray(card.tags) ? card.tags.join(', ') : '');
+    setLoading(true);
+    await archiveCard(cardId);
+    onArchived?.();
+    onClose();
   }
 
   if (!card) return null;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000
-      }}
-    >
-      <div
-        style={{
-          background: '#1f1f2e',
-          padding: '20px',
-          borderRadius: '8px',
-          width: '500px',
-          maxHeight: '80vh',
-          overflowY: 'auto',
-          color: 'white'
-        }}
-      >
+    <div className={styles.overlay}>
+      <div className={styles.modal}>
         {!editing ? (
           <>
-            <h2>{card.title}</h2>
-            <p>{card.description || 'Sem descrição'}</p>
+            <h2 className={styles.title}>{card.title}</h2>
 
-            <div style={{ marginTop: '10px', fontSize: '14px' }}>
-              <p>⚡ Prioridade: {card.priority}</p>
+            <p className={styles.description}>
+              {card.description || 'Sem descrição'}
+            </p>
 
-              {card.assignee && (
-                <p>👤 {card.assignee.username}</p>
-              )}
-
-              {card.due_date && (
-                <p>📅 {card.due_date}</p>
-              )}
+            <div className={styles.meta}>
+              <span>⚡ {card.priority}</span>
+              {card.assignee && <span>👤 {card.assignee.username}</span>}
+              {card.due_date && <span>📅 {card.due_date}</span>}
             </div>
 
-            <div style={{ marginTop: '10px' }}>
+            <div className={styles.tags}>
               {card.tags?.map((tag: string, i: number) => (
-                <span
-                  key={i}
-                  style={{
-                    fontSize: '10px',
-                    background: '#555',
-                    padding: '3px 6px',
-                    marginRight: '5px',
-                    borderRadius: '4px'
-                  }}
-                >
+                <span key={i} className={styles.tag}>
                   {tag}
                 </span>
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', marginTop: '15px' }}>
-              <button onClick={handleStartEdit}>
-                Editar card
+            <div className={styles.actions}>
+              <button onClick={() => setEditing(true)} className={styles.secondary}>
+                Editar
               </button>
 
-              <button onClick={handleArchive} disabled={loading}>
-                {loading ? 'Arquivando...' : 'Arquivar card'}
+              <button onClick={handleArchive} className={styles.danger}>
+                Arquivar
               </button>
             </div>
           </>
         ) : (
-          <div style={{ marginBottom: '20px' }}>
-            <h3>Editar card</h3>
+          <div className={styles.editBlock}>
+            <h3>Editar</h3>
 
             <input
+              className={styles.input}
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
-              placeholder="Título"
-              style={{ width: '100%', marginBottom: '8px' }}
             />
 
             <textarea
+              className={styles.textarea}
               value={editDescription}
               onChange={(e) => setEditDescription(e.target.value)}
-              placeholder="Descrição"
-              style={{ width: '100%', height: '80px', marginBottom: '8px' }}
             />
 
             <select
+              className={styles.input}
               value={editPriority}
               onChange={(e) => setEditPriority(e.target.value)}
-              style={{ width: '100%', marginBottom: '8px' }}
             >
               <option value="low">low</option>
               <option value="medium">medium</option>
@@ -266,93 +149,60 @@ export default function CardModal({ cardId, onClose, onArchived }: Props) {
             </select>
 
             <input
+              className={styles.input}
               type="date"
               value={editDueDate}
               onChange={(e) => setEditDueDate(e.target.value)}
-              style={{ width: '100%', marginBottom: '8px' }}
             />
 
             <input
+              className={styles.input}
               value={editTags}
               onChange={(e) => setEditTags(e.target.value)}
-              placeholder="Tags separadas por vírgula"
-              style={{ width: '100%', marginBottom: '8px' }}
             />
 
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={handleSaveEdit} disabled={loading}>
-                {loading ? 'Salvando...' : 'Salvar'}
+            <div className={styles.actions}>
+              <button onClick={handleSaveEdit} className={styles.primary}>
+                Salvar
               </button>
 
-              <button onClick={handleCancelEdit} disabled={loading}>
+              <button onClick={() => setEditing(false)} className={styles.secondary}>
                 Cancelar
               </button>
             </div>
           </div>
         )}
 
-        <div style={{ marginTop: '20px' }}>
+        <div className={styles.section}>
           <h3>Histórico</h3>
 
-          {history.length === 0 && <p>Sem histórico</p>}
-
           {history.map((h) => (
-            <div
-              key={h.id}
-              style={{
-                borderBottom: '1px solid #444',
-                padding: '10px 0'
-              }}
-            >
+            <div key={h.id} className={styles.historyItem}>
               <strong>{h.performed_by?.username}</strong>
 
-              <p style={{ fontSize: '12px', color: '#aaa' }}>
+              <p className={styles.date}>
                 {new Date(h.created_at).toLocaleString()}
               </p>
 
-              {h.action === 'created' && <p>🟢 criou o card</p>}
-
-              {h.action === 'moved' && (
-                <p>
-                  🔄 {h.from_column?.name} → {h.to_column?.name}
-                </p>
-              )}
-
-              {h.action === 'commented' && (
-                <p>💬 {h.observation}</p>
-              )}
-
-              {h.action === 'updated' && (
-                <p>✏️ atualizou</p>
-              )}
-
-              {h.action === 'archived' && (
-                <p>📦 arquivou o card</p>
-              )}
-
-              {h.observation && h.action !== 'commented' && (
-                <p style={{ fontStyle: 'italic' }}>
-                  "{h.observation}"
-                </p>
-              )}
+              <p>{h.action}</p>
             </div>
           ))}
         </div>
 
-        <div style={{ marginTop: '20px' }}>
+        <div className={styles.section}>
           <textarea
+            className={styles.textarea}
+            placeholder="Comentário..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Comentário (mínimo 10 caracteres)"
-            style={{ width: '100%', height: '80px' }}
           />
 
-          <button onClick={handleComment} disabled={loading}>
-            {loading ? 'Enviando...' : 'Comentar'}
+          <button onClick={handleComment} className={styles.primary}>
+            Comentar
           </button>
         </div>
 
-        <button onClick={onClose} style={{ marginTop: '20px' }}>
+        <button onClick={onClose} className={styles.close}>
           Fechar
         </button>
       </div>

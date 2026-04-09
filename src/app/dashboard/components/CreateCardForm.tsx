@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createCard } from '../../lib/cards';
+import styles from './CreateCardForm.module.css';
 
 type Props = {
   boardId: string;
@@ -74,11 +75,9 @@ export default function CreateCardForm({
   if (!open) {
     return (
       <button
+        className={styles.openButton}
         onClick={() => setOpen(true)}
-        style={{
-          marginTop: '10px',
-          width: '100%',
-        }}
+        type="button"
       >
         + Adicionar card
       </button>
@@ -86,32 +85,25 @@ export default function CreateCardForm({
   }
 
   return (
-    <div
-      style={{
-        marginTop: '10px',
-        background: '#2a2a3a',
-        padding: '10px',
-        borderRadius: '6px',
-      }}
-    >
+    <div className={styles.formCard}>
       <input
+        className={styles.input}
         placeholder="Título"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        style={{ width: '100%', marginBottom: '8px' }}
       />
 
       <textarea
+        className={styles.textarea}
         placeholder="Descrição"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        style={{ width: '100%', height: '70px', marginBottom: '8px' }}
       />
 
       <select
+        className={styles.input}
         value={priority}
         onChange={(e) => setPriority(e.target.value)}
-        style={{ width: '100%', marginBottom: '8px' }}
       >
         <option value="low">low</option>
         <option value="medium">medium</option>
@@ -120,25 +112,35 @@ export default function CreateCardForm({
       </select>
 
       <input
+        className={styles.input}
         type="date"
         value={dueDate}
         onChange={(e) => setDueDate(e.target.value)}
-        style={{ width: '100%', marginBottom: '8px' }}
       />
 
       <input
+        className={styles.input}
         placeholder="Tags separadas por vírgula"
         value={tags}
         onChange={(e) => setTags(e.target.value)}
-        style={{ width: '100%', marginBottom: '8px' }}
       />
 
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button onClick={handleCreate} disabled={loading}>
+      <div className={styles.actions}>
+        <button
+          className={styles.primaryButton}
+          onClick={handleCreate}
+          disabled={loading}
+          type="button"
+        >
           {loading ? 'Criando...' : 'Criar'}
         </button>
 
-        <button onClick={resetForm} disabled={loading}>
+        <button
+          className={styles.secondaryButton}
+          onClick={resetForm}
+          disabled={loading}
+          type="button"
+        >
           Cancelar
         </button>
       </div>

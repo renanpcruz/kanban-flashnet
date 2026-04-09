@@ -1,0 +1,177 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  background: #f8fafc;
+}
+
+.main {
+  flex: 1;
+  padding: 48px 40px;
+}
+
+.header {
+  margin-bottom: 28px;
+}
+
+.greeting {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #0f4675;
+}
+
+.title {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  color: #0f4675;
+}
+
+/* LISTA DE BOARDS */
+
+.boardList {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.empty {
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* CARD DO BOARD */
+
+.boardCard {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 18px 20px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.boardCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.08);
+}
+
+.boardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.boardTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #0f4675;
+}
+
+.boardDescription {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* BADGES */
+
+.badge {
+  background: #dbe3ea;
+  color: #0f4675;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.boardStats {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.statBox {
+  background: #dbe3ea;
+  color: #0f4675;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+/* AÇÃO (seta) */
+
+.boardFooter {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.arrow {
+  font-size: 22px;
+  color: #0f4675;
+}
+
+.createBoardBox {
+  margin-bottom: 24px;
+  background: #f2f4f7;
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.createBoardTitle {
+  margin: 0 0 12px;
+  color: #0f4675;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.createBoardRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.input {
+  min-width: 220px;
+  flex: 1;
+  height: 44px;
+  border: 1px solid #d7dde4;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f4675;
+  padding: 0 14px;
+  outline: none;
+  font-size: 14px;
+}
+
+.input::placeholder {
+  color: #94a3b8; /* cinza visível */
+  opacity: 1;
+}
+
+.input:focus {
+  border-color: #0f4675;
+  box-shadow: 0 0 0 3px rgba(15, 70, 117, 0.12);
+}
+
+.primaryButton {
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  padding: 0 20px;
+  background: #0f4675;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: #0c2f47;
+}
+
+.primaryButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

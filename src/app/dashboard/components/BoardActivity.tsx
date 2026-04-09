@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getBoardActivity } from '../../lib/boards';
+import styles from './BoardActivity.module.css';
 
 export default function BoardActivity({ boardId }: any) {
   const [activities, setActivities] = useState<any[]>([]);
@@ -16,48 +17,62 @@ export default function BoardActivity({ boardId }: any) {
   }, [boardId]);
 
   return (
-    <div style={{ marginTop: '30px' }}>
-      <h2>Atividade recente</h2>
+    <div className={styles.container}>
+      <h2 className={styles.title}>Atividade recente</h2>
 
-      {activities.length === 0 && <p>Nenhuma atividade</p>}
+      {activities.length === 0 && (
+        <p className={styles.empty}>Nenhuma atividade</p>
+      )}
 
-      {activities.map((a) => (
-        <div
-          key={a.id}
-          style={{
-            borderBottom: '1px solid #444',
-            padding: '10px 0'
-          }}
-        >
-          <strong>{a.performed_by?.username}</strong>
+      <div className={styles.list}>
+        {activities.map((a) => (
+          <div key={a.id} className={styles.item}>
+            <div className={styles.header}>
+              <strong className={styles.user}>
+                {a.performed_by?.username || 'Sistema'}
+              </strong>
 
-          <p style={{ fontSize: '12px', color: '#aaa' }}>
-            {new Date(a.created_at).toLocaleString()}
-          </p>
+              <span className={styles.date}>
+                {new Date(a.created_at).toLocaleString()}
+              </span>
+            </div>
 
-          {/* EVENTOS */}
-          {a.action === 'created' && (
-            <p>🟢 criou o card "{a.card?.title}"</p>
-          )}
+            <div className={styles.content}>
+              {a.action === 'created' && (
+                <p>
+                  🟢 criou o card <b>"{a.card?.title}"</b>
+                </p>
+              )}
 
-          {a.action === 'moved' && (
-            <p>
-              🔄 moveu "{a.card?.title}" de{' '}
-              <b>{a.from_column}</b> para <b>{a.to_column}</b>
-            </p>
-          )}
+              {a.action === 'moved' && (
+                <p>
+                  🔄 moveu <b>"{a.card?.title}"</b> de{' '}
+                  <span className={styles.highlight}>{a.from_column}</span> para{' '}
+                  <span className={styles.highlight}>{a.to_column}</span>
+                </p>
+              )}
 
-          {a.action === 'commented' && (
-            <p>
-              💬 comentou em "{a.card?.title}": {a.observation}
-            </p>
-          )}
+              {a.action === 'commented' && (
+                <p>
+                  💬 comentou em <b>"{a.card?.title}"</b>
+                </p>
+              )}
 
-          {a.action === 'updated' && (
-            <p>✏️ atualizou "{a.card?.title}"</p>
-          )}
-        </div>
-      ))}
+              {a.action === 'updated' && (
+                <p>
+                  ✏️ atualizou <b>"{a.card?.title}"</b>
+                </p>
+              )}
+            </div>
+
+            {a.observation && (
+              <p className={styles.observation}>
+                "{a.observation}"
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
